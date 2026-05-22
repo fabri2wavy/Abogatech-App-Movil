@@ -32,7 +32,7 @@ export function WelcomeScreen() {
         return (
             <Animated.View style={{ opacity: fadeAnim }} className="flex-1 bg-[#0F172A] items-center justify-center">
                 <View className="w-24 h-24 rounded-3xl bg-[#7C3AED]/20 items-center justify-center mb-6">
-                    <Ionicons name="scale" size={56} color="#A78BFA" />
+                    <Ionicons name="briefcase" size={56} color="#A78BFA" />
                 </View>
                 <Text className="text-white text-4xl font-extrabold tracking-widest">
                     ABOGATECH
@@ -46,7 +46,7 @@ export function WelcomeScreen() {
         <Animated.View style={{ opacity: fadeAnim }} className="flex-1 bg-[#0F172A] justify-between px-6 py-12">
             <View className="flex-1 justify-center items-center">
                 <View className="w-16 h-16 rounded-2xl bg-[#7C3AED]/20 items-center justify-center mb-8">
-                    <Ionicons name="scale" size={32} color="#A78BFA" />
+                    <Ionicons name="briefcase" size={32} color="#A78BFA" />
                 </View>
 
                 <Text className="text-[#A78BFA] text-lg font-semibold uppercase tracking-widest mb-4">
@@ -63,7 +63,7 @@ export function WelcomeScreen() {
             </View>
 
             <TouchableOpacity
-                onPress={() => console.log("Navegar al login...")}
+                onPress={() => router.push('/auth/login')}
                 className="w-full h-16 bg-[#7C3AED] rounded-2xl flex-row items-center justify-center active:bg-[#6D28D9]"
             >
                 <Text className="text-white text-lg font-bold tracking-wide mr-2">
