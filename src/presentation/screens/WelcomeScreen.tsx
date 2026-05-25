@@ -30,11 +30,11 @@ export function WelcomeScreen() {
     // --- ESTADO 1: SPLASH SCREEN ---
     if (isSplash) {
         return (
-            <Animated.View style={{ opacity: fadeAnim }} className="flex-1 bg-[#0F172A] items-center justify-center">
-                <View className="w-24 h-24 rounded-3xl bg-[#7C3AED]/20 items-center justify-center mb-6">
-                    <Ionicons name="briefcase" size={56} color="#A78BFA" />
+            <Animated.View style={{ opacity: fadeAnim }} className="flex-1 bg-[#FFFFFF] items-center justify-center">
+                <View className="w-24 h-24 rounded-3xl bg-[#1D4ED8]/20 items-center justify-center mb-6">
+                    <Ionicons name="briefcase" size={56} color="#3B82F6" />
                 </View>
-                <Text className="text-white text-4xl font-extrabold tracking-widest">
+                <Text className="text-black text-4xl font-extrabold tracking-widest">
                     ABOGATECH
                 </Text>
             </Animated.View>
@@ -43,17 +43,17 @@ export function WelcomeScreen() {
 
     // --- ESTADO 2: PANTALLA DE BIENVENIDA ---
     return (
-        <Animated.View style={{ opacity: fadeAnim }} className="flex-1 bg-[#0F172A] justify-between px-6 py-12">
+        <Animated.View style={{ opacity: fadeAnim }} className="flex-1 bg-[#FFFFFF] justify-between px-6 py-12">
             <View className="flex-1 justify-center items-center">
-                <View className="w-16 h-16 rounded-2xl bg-[#7C3AED]/20 items-center justify-center mb-8">
-                    <Ionicons name="briefcase" size={32} color="#A78BFA" />
+                <View className="w-16 h-16 rounded-2xl bg-[#1D4ED8]/20 items-center justify-center mb-8">
+                    <Ionicons name="briefcase" size={32} color="#3B82F6" />
                 </View>
 
-                <Text className="text-[#A78BFA] text-lg font-semibold uppercase tracking-widest mb-4">
+                <Text className="text-[#3B82F6] text-lg font-semibold uppercase tracking-widest mb-4">
                     Abogatech
                 </Text>
 
-                <Text className="text-white text-4xl font-bold text-center leading-tight mb-6">
+                <Text className="text-black text-4xl font-bold text-center leading-tight mb-6">
                     Tu ecosistema legal de alto rendimiento
                 </Text>
 
@@ -64,7 +64,7 @@ export function WelcomeScreen() {
 
             <TouchableOpacity
                 onPress={() => router.push('/auth/login')}
-                className="w-full h-16 bg-[#7C3AED] rounded-2xl flex-row items-center justify-center active:bg-[#6D28D9]"
+                className="w-full h-16 bg-[#1D4ED8] rounded-2xl flex-row items-center justify-center active:bg-[#6D28D9]"
             >
                 <Text className="text-white text-lg font-bold tracking-wide mr-2">
                     Comenzar

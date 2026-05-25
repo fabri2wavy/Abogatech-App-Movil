@@ -18,7 +18,7 @@ export function ForgotPasswordScreen() {
     // KeyboardAvoidingView ajusta la pantalla cuando el teclado se despliega en cualquier dispositivo
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1 bg-[#0F172A]"
+      className="flex-1 bg-[#000000]"
     >
       {/* SafeAreaView garantiza que ningún elemento choque con Notches, Cámaras o Dynamic Islands */}
       <SafeAreaView className="flex-1 px-6">
@@ -29,7 +29,7 @@ export function ForgotPasswordScreen() {
             onPress={() => router.back()}
             className="w-11 h-11 items-center justify-center bg-[#1E293B] rounded-full active:opacity-70 border border-slate-800"
           >
-            <Ionicons name="arrow-back" size={22} color="#A78BFA" />
+            <Ionicons name="arrow-back" size={22} color="#3B82F6" />
           </TouchableOpacity>
         </View>
 
@@ -41,8 +41,8 @@ export function ForgotPasswordScreen() {
 
           {/* Cabecera / Identidad */}
           <View className="items-center mb-10">
-            <View className="w-16 h-16 rounded-2xl bg-[#7C3AED]/20 items-center justify-center mb-6 shadow-sm">
-              <Ionicons name="key-outline" size={34} color="#A78BFA" />
+            <View className="w-16 h-16 rounded-2xl bg-[#1D4ED8]/20 items-center justify-center mb-6 shadow-sm">
+              <Ionicons name="key-outline" size={34} color="#3B82F6" />
             </View>
             <Text className="text-white text-3xl font-extrabold tracking-tight text-center">
               Recuperar Contraseña
@@ -60,7 +60,7 @@ export function ForgotPasswordScreen() {
               <Text className="text-slate-300 text-sm font-medium mb-2 pl-1">
                 Correo Electrónico Registrado
               </Text>
-              <View className="w-full h-14 bg-[#1E293B] rounded-xl flex-row items-center px-4 border border-slate-700/50 focus:border-[#7C3AED]">
+              <View className="w-full h-14 bg-[#1E293B] rounded-xl flex-row items-center px-4 border border-slate-700/50 focus:border-[#1D4ED8]">
                 <Ionicons name="mail-outline" size={20} color="#64748B" className="mr-3" />
                 <TextInput
                   value={email}
@@ -80,7 +80,7 @@ export function ForgotPasswordScreen() {
           <View className="mt-8">
             <TouchableOpacity
               onPress={handleResetPassword}
-              className="w-full h-14 bg-[#7C3AED] rounded-xl items-center justify-center active:bg-[#6D28D9] shadow-lg shadow-purple-900/40"
+              className="w-full h-14 bg-[#1D4ED8] rounded-xl items-center justify-center active:bg-[#6D28D9] shadow-lg shadow-purple-900/40"
             >
               <Text className="text-white text-lg font-bold tracking-wide">
                 Enviar Enlace
