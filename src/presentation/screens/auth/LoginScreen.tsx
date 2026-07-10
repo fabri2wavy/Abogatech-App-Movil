@@ -1,17 +1,41 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { supabase } from '../../../lib/supabase';
 
 export function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [secureText, setSecureText] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = () => {
-    router.replace('/(tabs)');
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Por favor ingresa tu correo y contraseña.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        Alert.alert('Error de autenticación', 'Credenciales incorrectas. Verifica tu correo y contraseña.');
+        return;
+      }
+
+      router.replace('/(tabs)');
+    } catch (error) {
+      Alert.alert('Error', 'Ocurrió un error inesperado al intentar iniciar sesión.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -95,10 +119,11 @@ export function LoginScreen() {
           <View className="mt-8">
             <TouchableOpacity
               onPress={handleLogin}
-              className="w-full h-14 bg-blue-600 rounded-xl items-center justify-center active:bg-blue-700 shadow-md shadow-blue-200"
+              disabled={isLoading}
+              className={`w-full h-14 rounded-xl items-center justify-center active:bg-blue-700 shadow-md shadow-blue-200 ${isLoading ? 'bg-blue-400' : 'bg-blue-600'}`}
             >
               <Text className="text-white text-lg font-bold tracking-wide">
-                Iniciar Sesión
+                {isLoading ? 'Ingresando...' : 'Iniciar Sesión'}
               </Text>
             </TouchableOpacity>
           </View>
