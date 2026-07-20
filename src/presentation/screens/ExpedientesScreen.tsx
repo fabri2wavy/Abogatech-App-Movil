@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,15 +7,55 @@ import {
   TextInput,
   TouchableOpacity,
   RefreshControl,
+  Modal,
+  Linking,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useExpedientes } from '../hooks/useExpedientes';
 import { Expediente, getNombreCompletoCliente } from '../../domain/entities/Expediente';
 
 export default function ExpedientesScreen() {
+  const router = useRouter();
   const { casos, isLoading, isRefreshing, onRefresh } = useExpedientes();
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // ─── Bottom Sheet Modal State (Standard RN) ───────────────────
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedCaso, setSelectedCaso] = useState<Expediente | null>(null);
+
+  const handlePresentModalPress = useCallback((caso: Expediente) => {
+    console.log('--- CARD PRESSED ---', caso.titulo);
+    setSelectedCaso(caso);
+    setModalVisible(true);
+  }, []);
+
+  const handleCloseModal = () => {
+    setModalVisible(false);
+  };
+
+  const openWhatsApp = (phone?: string) => {
+    if (!phone) {
+      Alert.alert('Sin número', 'El cliente no tiene un número de teléfono registrado.');
+      return;
+    }
+    // Removemos espacios, guiones o signos de más para limpiar el número
+    const cleanPhone = phone.replace(/\D/g, '');
+    const url = `whatsapp://send?phone=${cleanPhone}`;
+    
+    Linking.canOpenURL(url).then(supported => {
+      if (supported) {
+        Linking.openURL(url);
+      } else {
+        // Fallback a versión web si no tiene la app instalada
+        Linking.openURL(`https://wa.me/${cleanPhone}`);
+      }
+    }).catch(() => {
+      Alert.alert('Error', 'No se pudo abrir WhatsApp.');
+    });
+  };
 
   const filteredCasos = useMemo(() => {
     if (!searchQuery.trim()) return casos;
@@ -23,13 +63,16 @@ export default function ExpedientesScreen() {
     return casos.filter((c) => {
       const matchTitulo = c.titulo?.toLowerCase().includes(q);
       const matchNumero = c.numero_caso?.toLowerCase().includes(q);
-      return matchTitulo || matchNumero;
+      const matchNurej = c.nurej?.toLowerCase().includes(q);
+      const nombreCliente = getNombreCompletoCliente(c.cliente)?.toLowerCase() || '';
+      const matchCliente = nombreCliente.includes(q);
+      return matchTitulo || matchNumero || matchNurej || matchCliente;
     });
   }, [casos, searchQuery]);
 
   // ─── Render Item ──────────────────────────────────────────────
   const renderItem = ({ item }: { item: Expediente }) => {
-    // Determinar estilo según estado (si el backend devuelve algo como 'activo', 'cerrado', etc.)
+    // Determinar estilo según estado
     const getStatusStyle = (estado: string) => {
       const e = estado?.toLowerCase() || '';
       if (e.includes('activ') || e.includes('tramite')) return 'bg-emerald-100 text-emerald-700';
@@ -38,63 +81,45 @@ export default function ExpedientesScreen() {
       return 'bg-blue-100 text-blue-700';
     };
 
+    const statusClasses = getStatusStyle(item.estado).split(' ');
+    const bgClass = statusClasses[0];
+    const textClass = statusClasses[1];
+
+    const displayNumero = item.nurej ? `NUREJ: ${item.nurej}` : (item.numero_caso || 'Sin Número');
+    const displayCliente = getNombreCompletoCliente(item.cliente) || 'Cliente no asignado';
+
     return (
-      <View className="bg-white rounded-2xl p-4 mb-4 border border-slate-200 shadow-sm">
-        {/* Header de la tarjeta: Número y Estado */}
-        <View className="flex-row justify-between items-center mb-2">
-          <Text className="text-blue-600 font-bold text-sm">
-            {item.numero_caso || 'Sin Número'}
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={() => handlePresentModalPress(item)}
+        className="bg-white rounded-2xl p-5 mb-4 shadow-sm"
+        style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}
+      >
+        {/* Cabecera de Tarjeta */}
+        <View className="flex-row justify-between items-center mb-3">
+          <Text className="text-slate-400 text-xs font-bold uppercase tracking-wider">
+            {displayNumero}
           </Text>
-          <View className={`px-2.5 py-1 rounded-full ${getStatusStyle(item.estado).split(' ')[0]}`}>
-            <Text className={`text-xs font-bold ${getStatusStyle(item.estado).split(' ')[1]}`}>
+          <View className={`px-3 py-1 rounded-full ${bgClass}`}>
+            <Text className={`text-xs font-bold ${textClass}`}>
               {(item.estado || 'Desconocido').toUpperCase()}
             </Text>
           </View>
         </View>
 
-        {/* Título Principal */}
-        <Text className="text-slate-900 font-bold text-lg mb-2" numberOfLines={2}>
+        {/* Cuerpo */}
+        <Text className="text-slate-900 font-bold text-lg mb-4" numberOfLines={2}>
           {item.titulo}
         </Text>
 
-        {/* Detalles: Materia, Juzgado, NUREJ */}
-        <View className="space-y-1.5 mt-2">
-          {item.materia && (
-            <View className="flex-row items-center">
-              <Ionicons name="briefcase-outline" size={16} color="#64748B" />
-              <Text className="text-slate-500 text-sm ml-2 font-medium">
-                Materia: <Text className="text-slate-700">{item.materia}</Text>
-              </Text>
-            </View>
-          )}
-
-          <View className="flex-row items-center">
-            <Ionicons name="business-outline" size={16} color="#64748B" />
-            <Text className="text-slate-500 text-sm ml-2 font-medium" numberOfLines={1}>
-              Juzgado: <Text className="text-slate-700">{item.juzgado}</Text>
-            </Text>
-          </View>
-
-          {item.nurej && (
-            <View className="flex-row items-center">
-              <Ionicons name="document-text-outline" size={16} color="#64748B" />
-              <Text className="text-slate-500 text-sm ml-2 font-medium">
-                NUREJ: <Text className="text-slate-700">{item.nurej}</Text>
-              </Text>
-            </View>
-          )}
+        {/* Pie */}
+        <View className="flex-row items-center pt-3 border-t border-slate-100">
+          <Ionicons name="person" size={16} color="#94A3B8" />
+          <Text className="text-slate-600 text-sm font-medium ml-2" numberOfLines={1}>
+            {displayCliente}
+          </Text>
         </View>
-
-        {/* Cliente (Opcional si viene) */}
-        {getNombreCompletoCliente(item.cliente) && (
-          <View className="flex-row items-center mt-3 pt-3 border-t border-slate-100">
-            <Ionicons name="person-outline" size={14} color="#94A3B8" />
-            <Text className="text-slate-400 text-xs ml-1.5 font-medium">
-              Cliente: {getNombreCompletoCliente(item.cliente)}
-            </Text>
-          </View>
-        )}
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -129,17 +154,17 @@ export default function ExpedientesScreen() {
       </View>
 
       {/* Buscador */}
-      <View className="px-6 py-3">
-        <View className="flex-row items-center bg-white rounded-xl border border-slate-200 px-4 h-12">
-          <Ionicons name="search-outline" size={20} color="#94A3B8" />
+      <View className="px-6 py-4">
+        <View className="flex-row items-center bg-slate-100 rounded-2xl px-4 py-3">
+          <Ionicons name="search" size={20} color="#94A3B8" />
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder="Buscar por título o número de caso..."
+            placeholder="Buscar por cliente, título o NUREJ..."
             placeholderTextColor="#94A3B8"
             autoCapitalize="none"
             autoCorrect={false}
-            className="flex-1 text-slate-900 text-base ml-3 h-full"
+            className="flex-1 text-slate-900 text-base ml-3"
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')} className="p-1">
@@ -173,6 +198,96 @@ export default function ExpedientesScreen() {
           }
         />
       )}
+
+      {/* ─── Bottom Sheet (Standard RN Modal) ─────────────────────── */}
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={handleCloseModal}
+      >
+        <View className="flex-1 justify-end bg-black/40">
+          {/* Overlay clickeable para cerrar */}
+          <TouchableOpacity 
+            style={{ flex: 1 }} 
+            activeOpacity={1} 
+            onPress={handleCloseModal} 
+          />
+          
+          {/* Contenedor del Sheet */}
+          <View className="bg-white rounded-t-3xl shadow-2xl w-full max-h-[90%]" style={{ minHeight: '50%' }}>
+            
+            {/* Handle (La barrita superior decorativa) */}
+            <View className="w-full items-center pt-4 pb-2">
+              <View className="w-12 h-1.5 bg-slate-300 rounded-full" />
+            </View>
+
+            {selectedCaso && (
+              <View className="px-6 pt-2 pb-8">
+                <View className="mb-6">
+                  <Text className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">
+                    {selectedCaso.nurej ? `NUREJ: ${selectedCaso.nurej}` : (selectedCaso.numero_caso || 'Sin Número')}
+                  </Text>
+                  <Text className="text-slate-900 font-bold text-2xl leading-tight mb-3">
+                    {selectedCaso.titulo}
+                  </Text>
+                  <View className="flex-row items-center mb-2">
+                    <Ionicons name="person" size={16} color="#64748B" />
+                    <Text className="text-slate-600 text-sm font-medium ml-2">
+                      Cliente: {getNombreCompletoCliente(selectedCaso.cliente) || 'No asignado'}
+                    </Text>
+                  </View>
+                  <View className="flex-row items-center">
+                    <Ionicons name="information-circle" size={16} color="#64748B" />
+                    <Text className="text-slate-600 text-sm font-medium ml-2">
+                      Estado: {(selectedCaso.estado || 'Desconocido').toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+                
+                <View className="bg-slate-100 rounded-xl p-4 mb-8">
+                  {selectedCaso.materia && (
+                    <View className="flex-row items-center mb-2">
+                      <Ionicons name="briefcase-outline" size={16} color="#64748B" />
+                      <Text className="text-slate-600 text-sm ml-2">
+                        Materia: <Text className="font-bold">{selectedCaso.materia}</Text>
+                      </Text>
+                    </View>
+                  )}
+                  <View className="flex-row items-center">
+                    <Ionicons name="business-outline" size={16} color="#64748B" />
+                    <Text className="text-slate-600 text-sm ml-2">
+                      Juzgado: <Text className="font-bold">{selectedCaso.juzgado}</Text>
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Botones de acción */}
+                <View className="mt-auto pb-4">
+                  <TouchableOpacity 
+                    onPress={() => openWhatsApp(selectedCaso.cliente?.telefono)}
+                    className="bg-[#25D366] rounded-xl py-4 flex-row justify-center items-center mb-3 shadow-sm"
+                  >
+                    <Ionicons name="logo-whatsapp" size={22} color="white" />
+                    <Text className="text-white font-bold text-base ml-2">Contactar por WhatsApp</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    className="bg-slate-100 rounded-xl py-4 flex-row justify-center items-center"
+                    onPress={() => {
+                      handleCloseModal();
+                      router.push(`/expediente/${selectedCaso.id}` as any);
+                    }}
+                  >
+                    <Ionicons name="document-text" size={20} color="#475569" />
+                    <Text className="text-slate-700 font-bold text-base ml-2">Ver Detalles del Caso</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

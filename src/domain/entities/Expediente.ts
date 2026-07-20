@@ -6,6 +6,7 @@ export interface ClientePerfil {
   nombres: string;
   apellido_paterno: string;
   apellido_materno: string;
+  telefono?: string;
 }
 
 // ─── Expediente (esquema real de Supabase) ──────────────────────

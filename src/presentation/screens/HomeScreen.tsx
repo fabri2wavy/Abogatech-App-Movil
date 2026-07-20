@@ -1,37 +1,35 @@
-import React, { useState, useCallback } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import * as Location from 'expo-location';
+import React, { useCallback, useState } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
   ActivityIndicator,
   Alert,
-  ScrollView,
-  Modal,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
   Dimensions,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 
-// ─── Option types for selectors ────────────────────────────────
 const TIPO_OPTIONS = [
   { label: '📋 Tarea', value: 'tarea' },
   { label: '🎙️ Audiencia', value: 'audiencia' },
   { label: '👥 Reunión', value: 'reunion' },
-  { label: '📍 Check-in', value: 'checkin' },
 ];
 
-// ─── Types ───────────────────────────────────────────────────────
 type CheckinStatus = 'idle' | 'loading' | 'success';
+type AndroidPickerStep = 'date' | 'time';
+type ActivePicker = 'inicio' | 'fin' | null;
 
 import { useAgendaHoy } from '../hooks/useAgendaHoy';
-import type { AgendaEvento } from '../../domain/entities/AgendaEvento';
 
 function getAgendaIcon(tipo_evento?: string | null) {
   const normalizedTipo = tipo_evento?.toLowerCase() || '';
@@ -43,77 +41,115 @@ function getAgendaIcon(tipo_evento?: string | null) {
   return { name: 'document-text-outline' as const, bg: 'bg-amber-50', color: '#D97706' };
 }
 
-// ─── HomeScreen ──────────────────────────────────────────────────
 export default function HomeScreen() {
   const [checkinStatus, setCheckinStatus] = useState<CheckinStatus>('idle');
   const [lastCheckin, setLastCheckin] = useState<string | null>(null);
   const [completadas, setCompletadas] = useState<string[]>([]);
-  
-  // ─── Creation form state ───────────────────────────────────────
+
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [newTitulo, setNewTitulo] = useState('');
   const [newDescripcion, setNewDescripcion] = useState('');
   const [newTipo, setNewTipo] = useState('tarea');
-  const [newAsignado, setNewAsignado] = useState('Dr. Juan Iturri');
   const [newExpediente, setNewExpediente] = useState<string | null>(null);
   const [newFechaInicio, setNewFechaInicio] = useState(new Date());
-  const [newFechaFin, setNewFechaFin] = useState(new Date(Date.now() + 60 * 60 * 1000)); // +1h
-  const [showPickerInicio, setShowPickerInicio] = useState(false);
-  const [showPickerFin, setShowPickerFin] = useState(false);
+  const [newFechaFin, setNewFechaFin] = useState(new Date(Date.now() + 60 * 60 * 1000));
   const [isAdding, setIsAdding] = useState(false);
+
+  // iOS: mostramos el picker inline expandido debajo del campo
+  const [expandedPicker, setExpandedPicker] = useState<'inicio' | 'fin' | null>(null);
+
+  // Android: flujo dos pasos
+  const [activePicker, setActivePicker] = useState<ActivePicker>(null);
+  const [androidStep, setAndroidStep] = useState<AndroidPickerStep>('date');
+  const [androidTempDate, setAndroidTempDate] = useState<Date>(new Date());
 
   const { eventos, expedientesDisponibles, isLoading, agregarEvento } = useAgendaHoy();
 
-  // ─── Format date for display ───────────────────────────────────
   const formatFecha = (date: Date) =>
-    date.toLocaleDateString('es-MX', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    }) +
+    date.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' }) +
     ' ' +
-    date.toLocaleTimeString('es-MX', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
 
-  // ─── Date Picker Handlers ──────────────────────────────────────
-  const onChangeInicio = (event: DateTimePickerEvent, selectedDate?: Date) => {
-    if (Platform.OS !== 'ios') {
-      setShowPickerInicio(false);
-    }
-    if (selectedDate && selectedDate.getTime() !== newFechaInicio.getTime()) {
-      setNewFechaInicio(selectedDate);
+  // ─── iOS: toggle picker inline ────────────────────────────────
+  const togglePickerInicio = () => {
+    setExpandedPicker(prev => prev === 'inicio' ? null : 'inicio');
+  };
+
+  const togglePickerFin = () => {
+    setExpandedPicker(prev => prev === 'fin' ? null : 'fin');
+  };
+
+  // ─── iOS: onChange inline ─────────────────────────────────────
+  const onChangeInicio = (_event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (selectedDate) {
+      const newInicio = new Date(selectedDate);
+      setNewFechaInicio(newInicio);
+      if (newFechaFin <= newInicio) {
+        setNewFechaFin(new Date(newInicio.getTime() + 60 * 60 * 1000));
+      }
     }
   };
 
-  const onChangeFin = (event: DateTimePickerEvent, selectedDate?: Date) => {
-    if (Platform.OS !== 'ios') {
-      setShowPickerFin(false);
+  const onChangeFin = (_event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (selectedDate) setNewFechaFin(new Date(selectedDate));
+  };
+
+  // ─── Android: flujo dos pasos ─────────────────────────────────
+  const openPickerAndroid = (field: ActivePicker) => {
+    const base = field === 'inicio' ? newFechaInicio : newFechaFin;
+    setAndroidTempDate(new Date(base));
+    setAndroidStep('date');
+    setActivePicker(field);
+  };
+
+  const onChangeAndroid = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (event.type === 'dismissed' || !selectedDate) {
+      setActivePicker(null);
+      return;
     }
-    if (selectedDate && selectedDate.getTime() !== newFechaFin.getTime()) {
-      setNewFechaFin(selectedDate);
+    if (androidStep === 'date') {
+      setAndroidTempDate(selectedDate);
+      setAndroidStep('time');
+    } else {
+      const combined = new Date(androidTempDate);
+      combined.setHours(selectedDate.getHours(), selectedDate.getMinutes(), 0, 0);
+      if (activePicker === 'inicio') {
+        setNewFechaInicio(combined);
+        if (newFechaFin <= combined) {
+          setNewFechaFin(new Date(combined.getTime() + 60 * 60 * 1000));
+        }
+      }
+      else {
+        setNewFechaFin(combined);
+      }
+      setActivePicker(null);
     }
   };
 
-  // ─── Reset form ────────────────────────────────────────────────
   const resetForm = () => {
     setNewTitulo('');
     setNewDescripcion('');
     setNewTipo('tarea');
-    setNewAsignado('Dr. Juan Iturri');
     setNewExpediente(null);
     setNewFechaInicio(new Date());
     setNewFechaFin(new Date(Date.now() + 60 * 60 * 1000));
+    setExpandedPicker(null);
   };
 
-  // ─── Save new event ────────────────────────────────────────────
+  const handleCloseModal = () => {
+    resetForm();
+    setAddModalVisible(false);
+  };
+
   const handleGuardarEvento = async () => {
     if (!newTitulo.trim()) {
       Alert.alert('Falta título', 'Debes ingresar un título para la tarea.');
       return;
     }
-
+    if (newFechaFin <= newFechaInicio) {
+      Alert.alert('Fechas inválidas', 'La fecha de finalización debe ser posterior a la de inicio.');
+      return;
+    }
     setIsAdding(true);
     try {
       await agregarEvento({
@@ -123,27 +159,25 @@ export default function HomeScreen() {
         estado: 'pendiente',
         fecha_inicio: newFechaInicio.toISOString(),
         fecha_fin: newFechaFin.toISOString(),
-        asignado_a: '', // Will be overridden in hook
-        creado_por: '', // Will be overridden in hook
+        asignado_a: '',
+        creado_por: '',
         expediente_id: newExpediente,
       });
       resetForm();
       setAddModalVisible(false);
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'No se pudo guardar la tarea. Inténtalo de nuevo.');
     } finally {
       setIsAdding(false);
     }
   };
 
-  // ─── Inline Completion Toggle ──────────────────────────────────
   const toggleCompletada = (id: string) => {
-    setCompletadas((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    setCompletadas(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
     );
   };
 
-  // ─── Greeting based on time of day ────────────────────────────
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Buenos días';
@@ -151,242 +185,124 @@ export default function HomeScreen() {
     return 'Buenas noches';
   };
 
-  // ─── Check-in handler ─────────────────────────────────────────
   const handleCheckin = useCallback(async () => {
     if (checkinStatus === 'loading') return;
-
     setCheckinStatus('loading');
-
     try {
-      // 1. Request foreground location permission
       const { status } = await Location.requestForegroundPermissionsAsync();
-
       if (status !== 'granted') {
-        Alert.alert(
-          'Permiso denegado',
-          'Necesitamos acceso a tu ubicación para registrar el check-in. Habilita el permiso en Configuración.',
-          [{ text: 'Entendido' }]
-        );
+        Alert.alert('Permiso denegado', 'Habilita el permiso de ubicación en Configuración.', [{ text: 'Entendido' }]);
         setCheckinStatus('idle');
         return;
       }
-
-      // 2. Get current position
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-
+      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const { latitude, longitude } = location.coords;
-      const timestamp = new Date();
-      const timeString = timestamp.toLocaleTimeString('es-MX', {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-
+      const timeString = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
       setLastCheckin(timeString);
       setCheckinStatus('success');
-
-      Alert.alert(
-        '✅ Check-in registrado',
-        `Hora: ${timeString}\nCoordenadas: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
-        [{ text: 'OK' }]
-      );
-
-      // Reset to idle after 3 seconds
+      Alert.alert('✅ Check-in registrado', `Hora: ${timeString}\nCoordenadas: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`, [{ text: 'OK' }]);
       setTimeout(() => setCheckinStatus('idle'), 3000);
-    } catch (error) {
-      console.error('Error en check-in:', error);
-      Alert.alert(
-        'Error',
-        'No se pudo obtener la ubicación. Verifica que el GPS esté activo e intenta de nuevo.',
-        [{ text: 'Reintentar' }]
-      );
+    } catch {
+      Alert.alert('Error', 'No se pudo obtener la ubicación. Verifica que el GPS esté activo.', [{ text: 'Reintentar' }]);
       setCheckinStatus('idle');
     }
   }, [checkinStatus]);
 
-  // ─── Render ────────────────────────────────────────────────────
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 100 }}
-      >
-        {/* ── Header / Welcome ──────────────────────────────────── */}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+
+        {/* Header */}
         <View className="px-6 pt-6 pb-2">
-          <Text className="text-base text-slate-500 font-medium">
-            {getGreeting()} 👋
-          </Text>
-          <Text className="text-3xl font-black text-slate-900 tracking-tight mt-1">
-            Dr. Iturri
-          </Text>
+          <Text className="text-base text-slate-500 font-medium">{getGreeting()} 👋</Text>
+          <Text className="text-3xl font-black text-slate-900 tracking-tight mt-1">Dr. Iturri</Text>
         </View>
 
-        {/* ── Check-in Card ─────────────────────────────────────── */}
+        {/* Check-in Card */}
         <View className="px-6 mt-5">
           <View className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            {/* Card header */}
             <View className="flex-row items-center mb-4">
               <View className="w-10 h-10 rounded-full bg-blue-50 items-center justify-center">
                 <Ionicons name="location" size={20} color="#2563EB" />
               </View>
               <View className="ml-3 flex-1">
-                <Text className="text-slate-900 font-bold text-base">
-                  Check-in de asistencia
-                </Text>
-                <Text className="text-slate-400 text-sm mt-0.5">
-                  Registra tu presencia en el juzgado
-                </Text>
+                <Text className="text-slate-900 font-bold text-base">Check-in de asistencia</Text>
+                <Text className="text-slate-400 text-sm mt-0.5">Registra tu presencia en el juzgado</Text>
               </View>
             </View>
-
-            {/* Last check-in info */}
             {lastCheckin && (
               <View className="flex-row items-center bg-emerald-50 rounded-lg px-3 py-2 mb-4">
                 <Ionicons name="checkmark-circle" size={16} color="#059669" />
-                <Text className="text-emerald-700 text-sm font-medium ml-2">
-                  Último check-in: {lastCheckin}
-                </Text>
+                <Text className="text-emerald-700 text-sm font-medium ml-2">Último check-in: {lastCheckin}</Text>
               </View>
             )}
-
-            {/* Check-in button */}
             <TouchableOpacity
               onPress={handleCheckin}
               disabled={checkinStatus === 'loading'}
               activeOpacity={0.8}
-              className={`rounded-xl py-4 items-center justify-center flex-row ${
-                checkinStatus === 'success'
-                  ? 'bg-emerald-500'
-                  : checkinStatus === 'loading'
-                    ? 'bg-blue-400'
-                    : 'bg-blue-600'
-              }`}
+              className={`rounded-xl py-4 items-center justify-center flex-row ${checkinStatus === 'success' ? 'bg-emerald-500' : checkinStatus === 'loading' ? 'bg-blue-400' : 'bg-blue-600'
+                }`}
             >
               {checkinStatus === 'loading' ? (
-                <>
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                  <Text className="text-white font-bold text-lg ml-3">
-                    Obteniendo ubicación…
-                  </Text>
-                </>
+                <><ActivityIndicator size="small" color="#FFFFFF" /><Text className="text-white font-bold text-lg ml-3">Obteniendo ubicación…</Text></>
               ) : checkinStatus === 'success' ? (
-                <>
-                  <Ionicons name="checkmark-circle" size={24} color="#FFFFFF" />
-                  <Text className="text-white font-bold text-lg ml-2">
-                    ¡Registrado!
-                  </Text>
-                </>
+                <><Ionicons name="checkmark-circle" size={24} color="#FFFFFF" /><Text className="text-white font-bold text-lg ml-2">¡Registrado!</Text></>
               ) : (
-                <>
-                  <Ionicons name="navigate" size={22} color="#FFFFFF" />
-                  <Text className="text-white font-bold text-lg ml-2">
-                    Hacer Check-in
-                  </Text>
-                </>
+                <><Ionicons name="navigate" size={22} color="#FFFFFF" /><Text className="text-white font-bold text-lg ml-2">Hacer Check-in</Text></>
               )}
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* ── Agenda de Hoy ─────────────────────────────────────── */}
+        {/* Agenda de Hoy */}
         <View className="px-6 mt-8">
-          {/* Section header */}
           <View className="flex-row items-center justify-between mb-4">
             <View className="flex-row items-center">
               <Ionicons name="calendar" size={20} color="#2563EB" />
-              <Text className="text-slate-900 font-bold text-lg ml-2">
-                Agenda de Hoy
-              </Text>
+              <Text className="text-slate-900 font-bold text-lg ml-2">Agenda de Hoy</Text>
             </View>
             <Text className="text-slate-400 text-sm font-medium">
-              {new Date().toLocaleDateString('es-MX', {
-                weekday: 'short',
-                day: 'numeric',
-                month: 'short',
-              })}
+              {new Date().toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' })}
             </Text>
           </View>
-
-          {/* Agenda items or States */}
           {isLoading ? (
-            <View className="py-6 items-center">
-              <ActivityIndicator size="small" color="#2563EB" />
-            </View>
+            <View className="py-6 items-center"><ActivityIndicator size="small" color="#2563EB" /></View>
           ) : eventos.length === 0 ? (
             <View className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm items-center">
-              <Text className="text-slate-500 text-center">
-                No tienes audiencias ni tareas pendientes para hoy.
-              </Text>
+              <Text className="text-slate-500 text-center">No tienes audiencias ni tareas pendientes para hoy.</Text>
             </View>
           ) : (
             eventos.map((item, index) => {
               const iconInfo = getAgendaIcon(item.tipo_evento);
-              const hora = new Date(item.fecha_inicio).toLocaleTimeString('es-MX', {
-                hour: '2-digit',
-                minute: '2-digit',
-              });
-              
+              const hora = new Date(item.fecha_inicio).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
               const isCompletada = completadas.includes(item.id);
-
               return (
                 <View
                   key={item.id}
-                  className={`bg-white rounded-xl p-4 border shadow-sm ${
-                    isCompletada ? 'border-emerald-100 bg-slate-50 opacity-80' : 'border-slate-200'
-                  } ${index < eventos.length - 1 ? 'mb-3' : ''}`}
+                  className={`bg-white rounded-xl p-4 border shadow-sm ${isCompletada ? 'border-emerald-100 bg-slate-50 opacity-80' : 'border-slate-200'} ${index < eventos.length - 1 ? 'mb-3' : ''}`}
                 >
                   <View className="flex-row items-start">
-                    {/* Time + Icon */}
                     <View className={`items-center mr-4 ${isCompletada ? 'opacity-50' : ''}`}>
-                      <Text className="text-blue-600 font-bold text-sm">
-                        {hora}
-                      </Text>
-                      <View
-                        className={`w-9 h-9 rounded-full items-center justify-center mt-2 ${iconInfo.bg}`}
-                      >
-                        <Ionicons
-                          name={iconInfo.name}
-                          size={18}
-                          color={iconInfo.color}
-                        />
+                      <Text className="text-blue-600 font-bold text-sm">{hora}</Text>
+                      <View className={`w-9 h-9 rounded-full items-center justify-center mt-2 ${iconInfo.bg}`}>
+                        <Ionicons name={iconInfo.name} size={18} color={iconInfo.color} />
                       </View>
                     </View>
-
-                    {/* Content */}
                     <View className="flex-1">
-                      <Text
-                        className={`font-semibold text-base ${
-                          isCompletada ? 'text-slate-400 line-through' : 'text-slate-900'
-                        }`}
-                        numberOfLines={2}
-                      >
+                      <Text className={`font-semibold text-base ${isCompletada ? 'text-slate-400 line-through' : 'text-slate-900'}`} numberOfLines={2}>
                         {item.titulo}
                       </Text>
                       {item.descripcion && (
                         <View className="flex-row items-center mt-1.5">
-                          <Ionicons name="document-text-outline" size={14} color={isCompletada ? "#CBD5E1" : "#94A3B8"} />
-                          <Text 
-                            className={`text-sm ml-1 ${isCompletada ? 'text-slate-400 line-through' : 'text-slate-400'}`} 
-                            numberOfLines={1}
-                          >
+                          <Ionicons name="document-text-outline" size={14} color={isCompletada ? '#CBD5E1' : '#94A3B8'} />
+                          <Text className={`text-sm ml-1 ${isCompletada ? 'text-slate-400 line-through' : 'text-slate-400'}`} numberOfLines={1}>
                             {item.descripcion}
                           </Text>
                         </View>
                       )}
                     </View>
-
-                    {/* Toggle Button */}
-                    <TouchableOpacity
-                      onPress={() => toggleCompletada(item.id)}
-                      activeOpacity={0.7}
-                      className="ml-2 py-1 px-1 justify-center items-center"
-                    >
-                      <Ionicons
-                        name={isCompletada ? "checkmark-circle" : "ellipse-outline"}
-                        size={28}
-                        color={isCompletada ? "#10B981" : "#CBD5E1"}
-                      />
+                    <TouchableOpacity onPress={() => toggleCompletada(item.id)} activeOpacity={0.7} className="ml-2 py-1 px-1 justify-center items-center">
+                      <Ionicons name={isCompletada ? 'checkmark-circle' : 'ellipse-outline'} size={28} color={isCompletada ? '#10B981' : '#CBD5E1'} />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -396,83 +312,78 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
-      {/* ── Botón Flotante (FAB) ─────────────────────────────────── */}
+      {/* FAB */}
       <TouchableOpacity
         activeOpacity={0.8}
         onPress={() => setAddModalVisible(true)}
-        className="absolute bottom-28 right-6 w-14 h-14 bg-blue-600 rounded-full items-center justify-center shadow-lg elevation-5"
-        style={{
-          shadowColor: '#2563EB',
-          shadowOffset: { width: 0, height: 6 },
-          shadowOpacity: 0.4,
-          shadowRadius: 8,
-        }}
+        className="absolute bottom-28 right-6 w-14 h-14 bg-blue-600 rounded-full items-center justify-center"
+        style={{ shadowColor: '#2563EB', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 5 }}
       >
         <Ionicons name="add" size={30} color="#FFFFFF" />
       </TouchableOpacity>
 
-      {/* ── Modal de Creación ─────────────────────────────────────── */}
+      {/* Modal de Creación — sin Modal anidado, sin pointerEvents problemático */}
       <Modal
         visible={addModalVisible}
         animationType="slide"
-        transparent={true}
-        onRequestClose={() => setAddModalVisible(false)}
+        transparent
+        onRequestClose={handleCloseModal}
+        statusBarTranslucent
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={{ flex: 1, justifyContent: 'flex-end' }}
-        >
+        <View style={StyleSheet.absoluteFillObject}>
+          {/* Overlay: View pura, no TouchableOpacity, para evitar conflicto de gestos */}
           <TouchableOpacity
+            style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
+            onPress={handleCloseModal}
             activeOpacity={1}
-            onPress={() => setAddModalVisible(false)}
-            className="flex-1 bg-black/50"
           />
 
+          {/* Sheet — pegado al fondo con posición absoluta, sin KAV */}
           <View
-            className="bg-white rounded-t-3xl shadow-lg"
-            style={{ maxHeight: SCREEN_HEIGHT * 0.9 }}
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              maxHeight: SCREEN_HEIGHT * 0.92,
+              backgroundColor: 'white',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: -4 },
+              shadowOpacity: 0.1,
+              shadowRadius: 12,
+              elevation: 20,
+            }}
           >
-            {/* Handle bar */}
-            <View
-              style={{
-                width: 48,
-                height: 5,
-                borderRadius: 3,
-                backgroundColor: '#CBD5E1',
-                alignSelf: 'center',
-                marginTop: 12,
-                marginBottom: 8,
-              }}
-            />
+            {/* Handle */}
+            <View style={{ width: 48, height: 5, borderRadius: 3, backgroundColor: '#CBD5E1', alignSelf: 'center', marginTop: 12, marginBottom: 8 }} />
 
             <ScrollView
               showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
+              keyboardShouldPersistTaps="always"
+              keyboardDismissMode="on-drag"
+              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 48 }}
             >
-              <Text className="text-2xl font-black text-slate-900 tracking-tight mb-6 mt-2">
+              <Text style={{ fontSize: 22, fontWeight: '900', color: '#0F172A', marginBottom: 24, marginTop: 8 }}>
                 Nueva Tarea / Audiencia
               </Text>
 
-              {/* ─── Título ─────────────────────────────────── */}
-              <View className="mb-5">
-                <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">
-                  Título
-                </Text>
+              {/* Título */}
+              <View style={{ marginBottom: 20 }}>
+                <Text style={styles.label}>Título</Text>
                 <TextInput
                   value={newTitulo}
                   onChangeText={setNewTitulo}
                   placeholder="Ej. Presentar memorial"
                   placeholderTextColor="#94A3B8"
-                  className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-slate-900 text-base"
+                  style={styles.input}
                 />
               </View>
 
-              {/* ─── Descripción ────────────────────────────── */}
-              <View className="mb-5">
-                <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">
-                  Descripción (Opcional)
-                </Text>
+              {/* Descripción */}
+              <View style={{ marginBottom: 20 }}>
+                <Text style={styles.label}>Descripción (Opcional)</Text>
                 <TextInput
                   value={newDescripcion}
                   onChangeText={setNewDescripcion}
@@ -480,229 +391,234 @@ export default function HomeScreen() {
                   placeholderTextColor="#94A3B8"
                   multiline
                   numberOfLines={3}
-                  className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-slate-900 text-base"
-                  style={{ textAlignVertical: 'top', minHeight: 80 }}
+                  style={[styles.input, { textAlignVertical: 'top', minHeight: 80 }]}
                 />
               </View>
 
-              {/* ─── Tipo de Evento (chips) ────────────────── */}
-              <View className="mb-5">
-                <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">
-                  Tipo de Evento
-                </Text>
-                <View className="flex-row flex-wrap" style={{ gap: 8 }}>
-                  {TIPO_OPTIONS.map((opt) => (
+              {/* Tipo */}
+              <View style={{ marginBottom: 20 }}>
+                <Text style={styles.label}>Tipo de Evento</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {TIPO_OPTIONS.map(opt => (
                     <TouchableOpacity
                       key={opt.value}
                       activeOpacity={0.7}
                       onPress={() => setNewTipo(opt.value)}
-                      className={`px-4 py-2.5 rounded-xl border ${
-                        newTipo === opt.value
-                          ? 'bg-blue-600 border-blue-600'
-                          : 'bg-slate-50 border-slate-200'
-                      }`}
+                      style={[styles.chip, newTipo === opt.value && styles.chipActive]}
                     >
-                      <Text
-                        className={`text-sm font-semibold ${
-                          newTipo === opt.value ? 'text-white' : 'text-slate-700'
-                        }`}
-                      >
-                        {opt.label}
-                      </Text>
+                      <Text style={[styles.chipText, newTipo === opt.value && styles.chipTextActive]}>{opt.label}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
 
-              {/* ─── Asignado a ─────────────────────────────── */}
-              <View className="mb-5">
-                <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">
-                  Asignado a
-                </Text>
-                <View className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 flex-row items-center">
+              {/* Asignado */}
+              <View style={{ marginBottom: 20 }}>
+                <Text style={styles.label}>Asignado a</Text>
+                <View style={[styles.input, { flexDirection: 'row', alignItems: 'center' }]}>
                   <Ionicons name="person-outline" size={18} color="#6B7280" />
-                  <Text className="text-slate-900 text-base ml-3 font-medium">Dr. Juan Iturri</Text>
+                  <Text style={{ color: '#0F172A', fontSize: 16, marginLeft: 12, fontWeight: '500' }}>Dr. Juan Iturri</Text>
                 </View>
               </View>
 
-              {/* ─── Fecha Inicio ──────────────────────────── */}
-              <View className="mb-5">
-                <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">
-                  Fecha Inicio
-                </Text>
+              {/* ── Fecha Inicio ── */}
+              <View style={{ marginBottom: 20 }}>
+                <Text style={styles.label}>Fecha Inicio</Text>
                 <TouchableOpacity
-                  onPress={() => setShowPickerInicio(true)}
+                  onPress={Platform.OS === 'ios' ? togglePickerInicio : () => openPickerAndroid('inicio')}
                   activeOpacity={0.7}
-                  className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 flex-row items-center"
+                  style={[styles.input, { flexDirection: 'row', alignItems: 'center' }]}
                 >
                   <Ionicons name="calendar-outline" size={18} color="#2563EB" />
-                  <Text className="text-slate-900 text-base ml-3">
-                    {formatFecha(newFechaInicio)}
-                  </Text>
+                  <Text style={{ color: '#0F172A', fontSize: 16, marginLeft: 12, flex: 1 }}>{formatFecha(newFechaInicio)}</Text>
+                  {Platform.OS === 'ios' && (
+                    <Ionicons name={expandedPicker === 'inicio' ? 'chevron-up' : 'chevron-down'} size={18} color="#94A3B8" />
+                  )}
                 </TouchableOpacity>
+
+                {/* Picker iOS inline — se expande debajo del campo, sin Modal */}
+                {Platform.OS === 'ios' && expandedPicker === 'inicio' && (
+                  <View style={styles.inlinePicker}>
+                    <DateTimePicker
+                      value={newFechaInicio}
+                      mode="datetime"
+                      display="spinner"
+                      onChange={onChangeInicio}
+                      locale="es-MX"
+                      style={{ height: 180 }}
+                      textColor="#0F172A"
+                      themeVariant="light"
+                    />
+                    <TouchableOpacity
+                      onPress={() => setExpandedPicker(null)}
+                      style={styles.inlinePickerDone}
+                    >
+                      <Text style={styles.inlinePickerDoneText}>Listo ✓</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
 
-              {/* ─── Fecha Fin ─────────────────────────────── */}
-              <View className="mb-5">
-                <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">
-                  Fecha Fin
-                </Text>
+              {/* ── Fecha Fin ── */}
+              <View style={{ marginBottom: 20 }}>
+                <Text style={styles.label}>Fecha Fin</Text>
                 <TouchableOpacity
-                  onPress={() => setShowPickerFin(true)}
+                  onPress={Platform.OS === 'ios' ? togglePickerFin : () => openPickerAndroid('fin')}
                   activeOpacity={0.7}
-                  className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 flex-row items-center"
+                  style={[styles.input, { flexDirection: 'row', alignItems: 'center' }]}
                 >
                   <Ionicons name="calendar-outline" size={18} color="#059669" />
-                  <Text className="text-slate-900 text-base ml-3">
-                    {formatFecha(newFechaFin)}
-                  </Text>
+                  <Text style={{ color: '#0F172A', fontSize: 16, marginLeft: 12, flex: 1 }}>{formatFecha(newFechaFin)}</Text>
+                  {Platform.OS === 'ios' && (
+                    <Ionicons name={expandedPicker === 'fin' ? 'chevron-up' : 'chevron-down'} size={18} color="#94A3B8" />
+                  )}
                 </TouchableOpacity>
+
+                {Platform.OS === 'ios' && expandedPicker === 'fin' && (
+                  <View style={styles.inlinePicker}>
+                    <DateTimePicker
+                      value={newFechaFin}
+                      mode="datetime"
+                      display="spinner"
+                      onChange={onChangeFin}
+                      locale="es-MX"
+                      style={{ height: 180 }}
+                      textColor="#0F172A"
+                      themeVariant="light"
+                    />
+                    <TouchableOpacity
+                      onPress={() => setExpandedPicker(null)}
+                      style={styles.inlinePickerDone}
+                    >
+                      <Text style={styles.inlinePickerDoneText}>Listo ✓</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
 
-              {/* ─── Expediente Vinculado (chips dinámicos) ──────────── */}
-              <View className="mb-6">
-                <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">
-                  Expediente Vinculado (Opcional)
-                </Text>
-                <View className="flex-row flex-wrap" style={{ gap: 8 }}>
-                  {/* Opción Nula (Ninguno) */}
+              {/* Expediente */}
+              <View style={{ marginBottom: 24 }}>
+                <Text style={styles.label}>Expediente Vinculado (Opcional)</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                   <TouchableOpacity
                     activeOpacity={0.7}
                     onPress={() => setNewExpediente(null)}
-                    className={`px-4 py-2.5 rounded-xl border ${
-                      newExpediente === null
-                        ? 'bg-blue-600 border-blue-600'
-                        : 'bg-slate-50 border-slate-200'
-                    }`}
+                    style={[styles.chip, newExpediente === null && styles.chipActive]}
                   >
-                    <Text
-                      className={`text-sm font-semibold ${
-                        newExpediente === null ? 'text-white' : 'text-slate-700'
-                      }`}
-                    >
-                      — Ninguno —
-                    </Text>
+                    <Text style={[styles.chipText, newExpediente === null && styles.chipTextActive]}>— Ninguno —</Text>
                   </TouchableOpacity>
-
-                  {/* Opciones Dinámicas */}
-                  {expedientesDisponibles.map((exp) => (
+                  {expedientesDisponibles.map(exp => (
                     <TouchableOpacity
                       key={exp.id}
                       activeOpacity={0.7}
                       onPress={() => setNewExpediente(exp.id)}
-                      className={`px-4 py-2.5 rounded-xl border ${
-                        newExpediente === exp.id
-                          ? 'bg-blue-600 border-blue-600'
-                          : 'bg-slate-50 border-slate-200'
-                      }`}
+                      style={[styles.chip, newExpediente === exp.id && styles.chipActive]}
                     >
-                      <Text
-                        className={`text-sm font-semibold ${
-                          newExpediente === exp.id ? 'text-white' : 'text-slate-700'
-                        }`}
-                      >
-                        {exp.numero_caso}
-                      </Text>
+                      <Text style={[styles.chipText, newExpediente === exp.id && styles.chipTextActive]}>{exp.numero_caso}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
 
-              {/* ─── Botones ──────────────────────────────── */}
+              {/* Guardar */}
               <TouchableOpacity
                 onPress={handleGuardarEvento}
                 disabled={isAdding}
                 activeOpacity={0.8}
-                className={`rounded-xl py-4 flex-row items-center justify-center ${
-                  isAdding ? 'bg-blue-400' : 'bg-blue-600'
-                }`}
+                style={{ backgroundColor: isAdding ? '#93C5FD' : '#2563EB', borderRadius: 14, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}
               >
                 {isAdding ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <>
-                    <Ionicons name="save-outline" size={20} color="#FFFFFF" />
-                    <Text className="text-white font-bold text-base ml-2">Guardar</Text>
-                  </>
+                  <><Ionicons name="save-outline" size={20} color="#FFFFFF" /><Text style={{ color: 'white', fontWeight: '700', fontSize: 16, marginLeft: 8 }}>Guardar</Text></>
                 )}
               </TouchableOpacity>
 
               <TouchableOpacity
-                onPress={() => {
-                  resetForm();
-                  setAddModalVisible(false);
-                }}
+                onPress={handleCloseModal}
                 activeOpacity={0.7}
-                className="border border-slate-200 rounded-xl py-4 items-center justify-center mt-3"
+                style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 12 }}
               >
-                <Text className="text-slate-500 font-bold text-base">Cancelar</Text>
+                <Text style={{ color: '#64748B', fontWeight: '700', fontSize: 16 }}>Cancelar</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
 
-      {/* ── DateTimePickers (iOS Bottom Sheet & Android Native) ────────── */}
-      {Platform.OS === 'ios' && (
-        <>
-          <Modal visible={showPickerInicio} transparent animationType="slide" onRequestClose={() => setShowPickerInicio(false)}>
-            <View className="flex-1 justify-end bg-black/50">
-              <View className="bg-white rounded-t-3xl p-6 pb-10 shadow-lg">
-                <View className="flex-row justify-between items-center mb-4 px-2">
-                  <Text className="text-lg font-bold text-slate-900">Fecha y Hora Inicio</Text>
-                  <TouchableOpacity onPress={() => setShowPickerInicio(false)}>
-                    <Text className="text-blue-600 font-bold text-base">Listo</Text>
-                  </TouchableOpacity>
-                </View>
-                <DateTimePicker
-                  value={newFechaInicio}
-                  mode="datetime"
-                  display="spinner"
-                  onChange={onChangeInicio}
-                />
-              </View>
-            </View>
-          </Modal>
-
-          <Modal visible={showPickerFin} transparent animationType="slide" onRequestClose={() => setShowPickerFin(false)}>
-            <View className="flex-1 justify-end bg-black/50">
-              <View className="bg-white rounded-t-3xl p-6 pb-10 shadow-lg">
-                <View className="flex-row justify-between items-center mb-4 px-2">
-                  <Text className="text-lg font-bold text-slate-900">Fecha y Hora Fin</Text>
-                  <TouchableOpacity onPress={() => setShowPickerFin(false)}>
-                    <Text className="text-blue-600 font-bold text-base">Listo</Text>
-                  </TouchableOpacity>
-                </View>
-                <DateTimePicker
-                  value={newFechaFin}
-                  mode="datetime"
-                  display="spinner"
-                  onChange={onChangeFin}
-                />
-              </View>
-            </View>
-          </Modal>
-        </>
-      )}
-
-      {showPickerInicio && Platform.OS !== 'ios' && (
+      {/* Android picker — fuera del Modal, montado en la raíz */}
+      {Platform.OS !== 'ios' && activePicker !== null && (
         <DateTimePicker
-          value={newFechaInicio}
-          mode="date"
+          value={androidTempDate}
+          mode={androidStep}
           display="default"
-          onChange={onChangeInicio}
+          onChange={onChangeAndroid}
+          is24Hour
+          locale="es-MX"
         />
       )}
-
-      {showPickerFin && Platform.OS !== 'ios' && (
-        <DateTimePicker
-          value={newFechaFin}
-          mode="date"
-          display="default"
-          onChange={onChangeFin}
-        />
-      )}
-
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  label: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 6,
+    marginLeft: 4,
+  },
+  input: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: '#0F172A',
+  },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  chipActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
+  },
+  chipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  chipTextActive: {
+    color: 'white',
+  },
+  inlinePicker: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  inlinePickerDone: {
+    alignItems: 'flex-end',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  inlinePickerDoneText: {
+    color: '#2563EB',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+});

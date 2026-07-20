@@ -6,14 +6,49 @@ import {
   TouchableOpacity,
   Alert,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../../lib/supabase';
+import { useRouter } from 'expo-router';
 
 // ─── ProfileScreen ───────────────────────────────────────────────
 export default function ProfileScreen() {
+  const [isLoading, setIsLoading] = useState(true);
+  const [profile, setProfile] = useState<any>(null);
   const [biometricEnabled, setBiometricEnabled] = useState(true);
   const [pushEnabled, setPushEnabled] = useState(true);
+  const router = useRouter();
+
+  React.useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    try {
+      setIsLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: perfilData } = await supabase
+        .from('perfiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (perfilData) {
+        setProfile({
+          ...perfilData,
+          email: user.email,
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // ─── Logout handler ─────────────────────────────────────────────
   const handleLogout = () => {
@@ -25,14 +60,24 @@ export default function ProfileScreen() {
         {
           text: 'Cerrar Sesión',
           style: 'destructive',
-          onPress: () => {
-            // TODO: Implement actual logout logic
-            Alert.alert('Sesión cerrada', 'Has cerrado sesión correctamente.');
+          onPress: async () => {
+            await supabase.auth.signOut();
+            router.replace('/auth/login');
           },
         },
       ]
     );
   };
+
+  if (isLoading) {
+    return (
+      <View className="flex-1 items-center justify-center bg-slate-50">
+        <ActivityIndicator size="large" color="#2563EB" />
+      </View>
+    );
+  }
+
+  const initials = profile?.nombre ? `${profile.nombre.charAt(0)}${profile.apellidos?.charAt(0) || ''}`.toUpperCase() : 'JI';
 
   // ─── Render ────────────────────────────────────────────────────
   return (
@@ -46,16 +91,16 @@ export default function ProfileScreen() {
           {/* Avatar */}
           <View className="w-24 h-24 rounded-full bg-blue-600 items-center justify-center mb-4 shadow-lg">
             <Text className="text-white text-3xl font-black tracking-wider">
-              JI
+              {initials}
             </Text>
           </View>
 
           {/* Name & Role */}
           <Text className="text-2xl font-black text-slate-900 tracking-tight">
-            Dr. Juan Iturri
+            {profile?.nombre} {profile?.apellidos}
           </Text>
-          <Text className="text-base text-slate-400 font-medium mt-1">
-            Socio Principal - Iturri & Asociados
+          <Text className="text-base text-slate-400 font-medium mt-1 capitalize">
+            {profile?.rol || 'Abogado'} - Iturri & Asociados
           </Text>
         </View>
 
@@ -76,7 +121,7 @@ export default function ProfileScreen() {
                   Teléfono
                 </Text>
                 <Text className="text-base text-slate-900 font-semibold mt-0.5">
-                  +591 7XXXXXXX
+                  {profile?.telefono || 'No registrado'}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
@@ -95,7 +140,7 @@ export default function ProfileScreen() {
                   Correo electrónico
                 </Text>
                 <Text className="text-base text-slate-900 font-semibold mt-0.5">
-                  j.iturri@iturriyasociados.com
+                  {profile?.email || 'No registrado'}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />

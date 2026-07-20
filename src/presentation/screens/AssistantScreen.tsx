@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,6 +40,17 @@ export default function AssistantScreen() {
 
   // Keep conversation history in OpenAI format (role: 'user' | 'assistant')
   const aiHistoryRef = useRef<AIMessage[]>([]);
+
+  // ─── Keyboard Listener ─────────────────────────────────────────
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  useEffect(() => {
+    const showSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // ─── Scroll helper ─────────────────────────────────────────────
   const scrollToBottom = useCallback(() => {
@@ -194,16 +206,16 @@ export default function AssistantScreen() {
         )}
 
         {/* Input Bar */}
-        <View className="px-4 pt-2 pb-24 bg-white border-t border-slate-200">
+        <View className={`px-4 pt-2 bg-slate-50 ${keyboardVisible ? 'pb-4' : 'pb-[110px]'}`}>
           <View className="flex-row items-end">
-            <View className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2 mr-2 min-h-[44px] max-h-[120px] justify-center">
+            <View className="flex-1 bg-white border border-slate-200 shadow-sm rounded-3xl px-4 py-1 mr-2 min-h-[48px] max-h-[120px] justify-center">
               <TextInput
                 value={inputText}
                 onChangeText={setInputText}
                 placeholder="Escriba su consulta legal..."
                 placeholderTextColor="#94A3B8"
                 multiline
-                className="text-base text-slate-900 leading-5"
+                className="text-base text-slate-900 leading-5 py-2"
                 onSubmitEditing={handleSend}
                 blurOnSubmit={false}
                 editable={!isTyping}
@@ -213,7 +225,7 @@ export default function AssistantScreen() {
               onPress={handleSend}
               disabled={!inputText.trim() || isTyping}
               activeOpacity={0.8}
-              className={`w-11 h-11 rounded-full items-center justify-center ${
+              className={`w-12 h-12 rounded-full items-center justify-center shadow-sm ${
                 inputText.trim() && !isTyping ? 'bg-blue-600' : 'bg-slate-200'
               }`}
             >
