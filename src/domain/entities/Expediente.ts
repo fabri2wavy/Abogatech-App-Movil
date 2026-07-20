@@ -11,8 +11,11 @@ export interface ClientePerfil {
 // ─── Expediente (esquema real de Supabase) ──────────────────────
 export interface Expediente {
   id: string;
+  numero_caso?: string;
   titulo: string;
+  materia?: string;
   juzgado: string;
+  nurej?: string;
   estado: string;
   fecha_actualizacion: string;
   abogado_asignado_id: string;

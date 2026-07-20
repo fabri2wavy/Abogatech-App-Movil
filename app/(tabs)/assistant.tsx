@@ -1,12 +1,3 @@
-import React from 'react';
-import { View, Text } from 'react-native';
+import AssistantScreen from '../../src/presentation/screens/AssistantScreen';
 
-export default function AssistantScreen() {
-  return (
-    <View className="flex-1 items-center justify-center bg-slate-50">
-      <Text className="text-slate-500 text-lg font-medium">
-        Próximamente: Asistente IA
-      </Text>
-    </View>
-  );
-}
+export default AssistantScreen;

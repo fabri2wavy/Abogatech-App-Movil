@@ -1,12 +1,3 @@
-import React from 'react';
-import { View, Text } from 'react-native';
+import CourtsScreen from '../../src/presentation/screens/CourtsScreen';
 
-export default function CourtsScreen() {
-  return (
-    <View className="flex-1 items-center justify-center bg-slate-50">
-      <Text className="text-slate-500 text-lg font-medium">
-        Próximamente: Juzgados
-      </Text>
-    </View>
-  );
-}
+export default CourtsScreen;

@@ -1,66 +1,51 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import { Platform } from 'react-native';
+import CustomTabBar from '../../src/presentation/components/CustomTabBar';
 
 export default function TabLayout() {
   return (
     <Tabs
+      tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: '#FFFFFF', // Fondo blanco puro
-          borderTopWidth: 1,
-          borderTopColor: '#E2E8F0', // Borde gris súper suave
-          height: Platform.OS === 'ios' ? 88 : 68,
-          paddingBottom: Platform.OS === 'ios' ? 28 : 12,
-          paddingTop: 10,
-          elevation: 0, // Elimina la sombra extra en Android
-          shadowOpacity: 0, // Elimina la sombra extra en iOS
-        },
-        tabBarActiveTintColor: '#2563EB', // Azul corporativo
-        tabBarInactiveTintColor: '#94A3B8', // Gris pizarra claro para inactivos
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-        },
       }}>
-      
+
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Check-in',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'location' : 'location-outline'} size={22} color={color} />
+          title: 'Inicio',
+          tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons name={focused ? 'home' : 'home-outline'} size={size} color={color} />
           ),
         }}
       />
-      
+
       <Tabs.Screen
-        name="calendar"
+        name="expedientes"
         options={{
-          title: 'Calendario',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'calendar' : 'calendar-outline'} size={22} color={color} />
+          title: 'Casos',
+          tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons name={focused ? 'folder' : 'folder-outline'} size={size} color={color} />
           ),
         }}
       />
-      
+
       <Tabs.Screen
         name="courts"
         options={{
           title: 'Juzgados',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'map' : 'map-outline'} size={22} color={color} />
+          tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons name={focused ? 'business' : 'business-outline'} size={size} color={color} />
           ),
         }}
       />
-      
+
       <Tabs.Screen
         name="assistant"
         options={{
-          title: 'Asistente',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'chatbubbles' : 'chatbubbles-outline'} size={22} color={color} />
+          title: 'IA',
+          tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons name={focused ? 'sparkles' : 'sparkles-outline'} size={size} color={color} />
           ),
         }}
       />
@@ -69,8 +54,8 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Perfil',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'person' : 'person-outline'} size={22} color={color} />
+          tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={color} />
           ),
         }}
       />
