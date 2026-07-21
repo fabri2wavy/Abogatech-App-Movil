@@ -8,13 +8,22 @@ const ACTIVE_ICON = '#FFFFFF';
 const INACTIVE_ICON = '#6B7280';
 
 // ─── CustomTabBar ────────────────────────────────────────────────
-export default function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+interface CustomTabBarProps extends BottomTabBarProps {
+  hiddenRoutes?: Set<string>;
+}
+
+export default function CustomTabBar({ state, descriptors, navigation, hiddenRoutes }: CustomTabBarProps) {
+  // Filter out routes that are in the hiddenRoutes set
+  const visibleRoutes = hiddenRoutes
+    ? state.routes.filter((route) => !hiddenRoutes.has(route.name))
+    : state.routes;
+
   return (
     <View style={styles.container}>
       <View style={styles.pill}>
-        {state.routes.map((route, index) => {
+        {visibleRoutes.map((route) => {
           const { options } = descriptors[route.key];
-          const isFocused = state.index === index;
+          const isFocused = state.routes[state.index]?.key === route.key;
 
           const onPress = () => {
             const event = navigation.emit({

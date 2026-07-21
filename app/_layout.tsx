@@ -5,6 +5,7 @@ import { configureReanimatedLogger, ReanimatedLogLevel } from 'react-native-rean
 
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
+import { AuthProvider } from '../providers/authProvider';
 
 // Oculta las advertencias del modo estricto de Reanimated en la terminal
 configureReanimatedLogger({
@@ -15,9 +16,11 @@ configureReanimatedLogger({
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <BottomSheetModalProvider>
-        <Slot />
-      </BottomSheetModalProvider>
+      <AuthProvider>
+        <BottomSheetModalProvider>
+          <Slot />
+        </BottomSheetModalProvider>
+      </AuthProvider>
     </GestureHandlerRootView>
   );
-}
+}

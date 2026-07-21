@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'expo-router';
+import { useAuth } from '../../../providers/authProvider';
 
 // ─── ProfileScreen ───────────────────────────────────────────────
 export default function ProfileScreen() {
@@ -20,6 +21,7 @@ export default function ProfileScreen() {
   const [biometricEnabled, setBiometricEnabled] = useState(true);
   const [pushEnabled, setPushEnabled] = useState(true);
   const router = useRouter();
+  const { userProfile, cambiarRolDev } = useAuth();
 
   React.useEffect(() => {
     fetchProfile();
@@ -77,6 +79,7 @@ export default function ProfileScreen() {
     );
   }
 
+  const currentRole = userProfile?.rol || profile?.rol || 'abogado';
   const initials = profile?.nombre ? `${profile.nombre.charAt(0)}${profile.apellidos?.charAt(0) || ''}`.toUpperCase() : 'JI';
 
   // ─── Render ────────────────────────────────────────────────────
@@ -100,8 +103,52 @@ export default function ProfileScreen() {
             {profile?.nombre} {profile?.apellidos}
           </Text>
           <Text className="text-base text-slate-400 font-medium mt-1 capitalize">
-            {profile?.rol || 'Abogado'} - Iturri & Asociados
+            {currentRole} - Iturri & Asociados
           </Text>
+        </View>
+
+        {/* ── Modo Desarrollo - Probar Rol ────────────────────────── */}
+        <View className="px-6 mt-2 mb-6">
+          <Text className="text-sm font-bold text-amber-600 uppercase tracking-wider mb-3 ml-1">
+            🧪 Modo Desarrollo - Probar Rol
+          </Text>
+
+          <View className="bg-amber-50/80 rounded-2xl border border-amber-200 p-4 shadow-sm">
+            <Text className="text-xs text-amber-900 font-semibold mb-3">
+              Selecciona un rol para simular la navegación en tiempo real:
+            </Text>
+            <View className="flex-row flex-wrap gap-2">
+              {[
+                { label: 'Admin', value: 'admin' },
+                { label: 'Asociado Senior', value: 'asociado_senior' },
+                { label: 'Abogado', value: 'abogado' },
+                { label: 'Finanzas', value: 'finanzas' },
+                { label: 'Cliente', value: 'cliente' },
+              ].map((r) => {
+                const isSelected = currentRole === r.value;
+                return (
+                  <TouchableOpacity
+                    key={r.value}
+                    onPress={() => cambiarRolDev(r.value)}
+                    activeOpacity={0.7}
+                    className={`px-3 py-2 rounded-xl border ${
+                      isSelected
+                        ? 'bg-blue-600 border-blue-600'
+                        : 'bg-white border-slate-200'
+                    }`}
+                  >
+                    <Text
+                      className={`text-xs font-bold ${
+                        isSelected ? 'text-white' : 'text-slate-700'
+                      }`}
+                    >
+                      {r.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
         </View>
 
         {/* ── Información Personal ────────────────────────────── */}
